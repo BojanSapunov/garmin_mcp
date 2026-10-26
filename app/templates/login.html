@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Training log{% endblock %}
+{% block body %}
+<main class="container login-wrap d-flex flex-column justify-content-center align-items-center text-center">
+  <img src="/static/icon.svg" alt="" width="64" height="64" class="mb-3">
+  <h1 class="h3 mb-1">Training log</h1>
+  <p class="text-body-secondary mb-4">Private Garmin dashboard</p>
+  {% if error %}
+  <div class="alert alert-danger py-2" role="alert">Sign-in failed. Please try again.</div>
+  {% endif %}
+  <a class="btn btn-primary btn-lg px-4" href="/auth/google">Sign in with Google</a>
+</main>
+{% endblock %}

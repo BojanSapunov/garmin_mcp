@@ -1,0 +1,48 @@
+/* Chart and ink tokens (light), redefined for dark below */
+:root {
+  --chart-surface: #fcfcfb;
+  --ink-secondary: #52514e;
+  --ink-muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-other: #898781;
+}
+[data-bs-theme="dark"] {
+  --chart-surface: #1a1a19;
+  --ink-secondary: #c3c2b7;
+  --ink-muted: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-other: #6f6e69;
+}
+
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+[data-bs-theme="dark"] body { background: #0d0d0d; }
+[data-bs-theme="dark"] .card, [data-bs-theme="dark"] .list-group-item { background: var(--chart-surface); }
+
+.app-container { max-width: 900px; padding-left: 16px; padding-right: 16px; }
+.login-wrap { min-height: 100vh; }
+
+.hero-figure { font-size: 3rem; font-weight: 600; line-height: 1.1; }
+.stat-value { font-size: 1.35rem; font-weight: 600; }
+.unit { font-size: 0.55em; font-weight: 400; color: var(--bs-secondary-color); }
+.hero-figure .unit { font-size: 0.4em; }
+.tabular { font-variant-numeric: tabular-nums; }
+
+.chart-box { position: relative; height: 220px; }
+
+.type-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.type-run { background: var(--series-1); }
+.type-other { background: var(--series-other); }
+
+#sync-btn { min-height: 44px; }

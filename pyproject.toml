@@ -1,0 +1,50 @@
+[project]
+name = "garmin-mcp"
+version = "0.2.0"
+description = "Garmin Connect activities: web dashboard (FastAPI) and MCP server for Claude"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "authlib>=1.3",
+    "itsdangerous>=2.2",
+    "jinja2>=3.1",
+    "httpx>=0.28",
+    "pydantic-settings>=2.4",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=2.3", "fitdecode>=0.10"]
+dev = ["pytest>=8", "ruff>=0.6", "pgserver>=0.1"]
+
+[project.scripts]
+garmin-sync = "garmin_mcp.sync:main"
+garmin-mcp = "garmin_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*", "garmin_mcp*"]
+
+[tool.setuptools.package-data]
+app = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests", "."]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]  # FastAPI's Depends() in defaults is the intended pattern
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "garmin_mcp", "conftest"]
