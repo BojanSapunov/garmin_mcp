@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "garmin": {
+      "command": ".venv/bin/garmin-mcp",
+      "args": []
+    }
+  }
+}

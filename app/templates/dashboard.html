@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block body %}
+<nav class="navbar border-bottom bg-body sticky-top">
+  <div class="container app-container">
+    <span class="navbar-brand d-flex align-items-center gap-2 mb-0">
+      <img src="/static/icon.svg" alt="" width="24" height="24"> Training log
+    </span>
+    <form method="post" action="/logout" class="mb-0">
+      <button class="btn btn-sm btn-outline-secondary" type="submit">Sign out</button>
+    </form>
+  </div>
+</nav>
+
+<main class="container app-container py-3">
+
+  {# ---- sync ---- #}
+  <section class="d-flex align-items-center gap-3 mb-3">
+    <button id="sync-btn" class="btn btn-primary flex-shrink-0" type="button">
+      <span class="spinner-border spinner-border-sm d-none me-1" aria-hidden="true"></span>
+      <span class="label">Refresh from Garmin</span>
+    </button>
+    <div class="small text-body-secondary" id="sync-status" aria-live="polite">
+      {% if last_sync %}
+        Last sync {{ last_sync.started_at.strftime('%d %b %H:%M') }} UTC ·
+        {% if last_sync.status == 'success' %}+{{ last_sync.added }} new{% else %}{{ last_sync.status }}{% endif %}
+      {% else %}
+        Never synced
+      {% endif %}
+    </div>
+  </section>
+
+  {% if key_days_left is not none and key_days_left <= 14 %}
+  <div class="alert alert-warning small py-2" role="alert">
+    <strong>Garmin API key {{ 'expired' if key_days_left < 0 else 'expires in ' ~ key_days_left ~ ' days' }}.</strong>
+    Create a new one in Garmin Connect and update the <code>GARMIN_API_KEY</code> secret.
+  </div>
+  {% endif %}
+
+  {# ---- last 30 days ---- #}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Last {{ summary.days }} days</h2>
+    <div class="card card-body mb-2">
+      <div class="small text-body-secondary">Running distance</div>
+      <div class="hero-figure">{{ summary.run_km }}<span class="unit"> km</span></div>
+    </div>
+    <div class="row row-cols-2 row-cols-md-3 g-2">
+      {% set tiles = [
+        ('Runs', summary.runs, ''),
+        ('Running time', summary.run_hours, ' h'),
+        ('Average pace', summary.run_pace_s_per_km | pace, ' /km'),
+        ('Average heart rate', summary.run_avg_hr or '–', ' bpm' if summary.run_avg_hr else ''),
+        ('Longest run', summary.longest_run_km or '–', ' km' if summary.longest_run_km else ''),
+        ('Other activities', summary.other_count, ' · ' ~ summary.other_hours ~ ' h'),
+      ] %}
+      {% for label, value, unit in tiles %}
+      <div class="col">
+        <div class="card card-body stat-tile h-100">
+          <div class="small text-body-secondary">{{ label }}</div>
+          <div class="stat-value">{{ value }}<span class="unit">{{ unit }}</span></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---- distance charts ---- #}
+  <section class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h6 text-body-secondary text-uppercase mb-0">Distance</h2>
+      <div class="btn-group btn-group-sm" role="group" aria-label="Period">
+        <input type="radio" class="btn-check" name="period" id="p-week" value="week" checked>
+        <label class="btn btn-outline-secondary" for="p-week">Week</label>
+        <input type="radio" class="btn-check" name="period" id="p-month" value="month">
+        <label class="btn btn-outline-secondary" for="p-month">Month</label>
+        <input type="radio" class="btn-check" name="period" id="p-year" value="year">
+        <label class="btn btn-outline-secondary" for="p-year">Year</label>
+      </div>
+    </div>
+
+    <div class="card card-body mb-2">
+      <h3 class="h6 mb-0">Running</h3>
+      <div class="small text-body-secondary mb-2" id="running-caption">km per week</div>
+      <div class="chart-box"><canvas id="running-chart" aria-label="Running distance per period" role="img"></canvas></div>
+    </div>
+
+    <div class="card card-body mb-2">
+      <h3 class="h6 mb-0">Other activities</h3>
+      <div class="small text-body-secondary mb-2" id="other-caption">km per week, by type</div>
+      <div class="chart-box"><canvas id="other-chart" aria-label="Other activity distance per period by type" role="img"></canvas></div>
+      <div class="small text-body-secondary mt-2 d-none" id="other-empty">No other activities with distance in this range.</div>
+    </div>
+
+    <details class="small">
+      <summary class="text-body-secondary">Show as table</summary>
+      <div class="table-responsive mt-2"><table class="table table-sm tabular" id="distance-table"></table></div>
+    </details>
+  </section>
+
+  {# ---- last month's activities ---- #}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Last month · {{ activities | length }} activities</h2>
+    <div class="list-group">
+      {% for a in activities %}
+      <div class="list-group-item">
+        <div class="d-flex justify-content-between align-items-baseline gap-2">
+          <div class="fw-semibold text-truncate">{{ a.activity_name or (a.activity_type | activity_type) }}</div>
+          <div class="small text-body-secondary flex-shrink-0">{{ a.start_time_local.strftime('%a %d %b') }}</div>
+        </div>
+        <div class="small text-body-secondary d-flex flex-wrap column-gap-3 row-gap-0 tabular">
+          <span><span class="type-dot {{ 'type-run' if a.is_running else 'type-other' }}"></span>{{ a.activity_type | activity_type }}</span>
+          {% if a.distance_m %}<span>{{ '%.1f' % (a.distance_m / 1000) }} km</span>{% endif %}
+          <span>{{ a.duration_s | duration }}</span>
+          {% if a.is_running and a.distance_m %}<span>{{ (a.duration_s / (a.distance_m / 1000)) | pace }} /km</span>{% endif %}
+          {% if a.avg_hr %}<span>{{ a.avg_hr | int }} bpm</span>{% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="list-group-item text-body-secondary">No activities in the last month. Try a refresh.</div>
+      {% endfor %}
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+<script src="/static/app.js"></script>
+{% endblock %}
