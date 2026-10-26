@@ -1,0 +1,78 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          docker build -t "${{ steps.meta.outputs.image }}" .
+          docker push "${{ steps.meta.outputs.image }}"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production  # the Azure federated credential trusts only this environment
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy infrastructure and app
+        id: deploy
+        run: |
+          url=$(az deployment group create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "deploy-${GITHUB_RUN_NUMBER}" \
+            --template-file infra/main.bicep \
+            --parameters \
+              image="${{ needs.build.outputs.image }}" \
+              postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
+              garminApiKey="${{ secrets.GARMIN_API_KEY }}" \
+              garminKeyExpires="${{ vars.GARMIN_KEY_EXPIRES }}" \
+              googleClientId="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              googleClientSecret="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              allowedEmail="${{ secrets.ALLOWED_EMAIL }}" \
+              sessionSecret="${{ secrets.SESSION_SECRET }}" \
+              budgetEmail="${{ secrets.ALLOWED_EMAIL }}" \
+            --query properties.outputs.appUrl.value -o tsv)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url" >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.url }}/login" || true)
+            [ "$code" = "200" ] && echo "login page OK" && exit 0
+            sleep 10
+          done
+          echo "App did not respond with 200 on /login" && exit 1
