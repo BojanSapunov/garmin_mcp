@@ -16,7 +16,7 @@ class Base(DeclarativeBase):
 @lru_cache
 def get_engine() -> Engine:
     # pool_pre_ping: the app scales to zero and Postgres may drop idle connections
-    return create_engine(get_settings().database_url, pool_pre_ping=True, pool_size=5)
+    return create_engine(get_settings().sqlalchemy_url, pool_pre_ping=True, pool_size=5)
 
 
 def get_session() -> Iterator[Session]:

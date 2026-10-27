@@ -4,6 +4,7 @@ from datetime import date
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 
 class Settings(BaseSettings):
@@ -11,6 +12,12 @@ class Settings(BaseSettings):
 
     app_env: str = "local"  # local | production
     database_url: str = "postgresql+psycopg://garmin:garmin@localhost:5433/garmin"
+    # In Azure the connection comes in parts, because the password is a Key Vault reference.
+    # When POSTGRES_HOST is set these take precedence over DATABASE_URL.
+    postgres_host: str = ""
+    postgres_user: str = ""
+    postgres_password: str = ""
+    postgres_db: str = "garmin"
 
     garmin_api_key: str = ""
     garmin_key_expires: date | None = None  # shown on the dashboard so the key gets renewed in time
@@ -26,6 +33,20 @@ class Settings(BaseSettings):
     @property
     def is_local(self) -> bool:
         return self.app_env == "local"
+
+    @property
+    def sqlalchemy_url(self) -> str | URL:
+        if not self.postgres_host:
+            return self.database_url
+        return URL.create(
+            "postgresql+psycopg",
+            username=self.postgres_user,
+            password=self.postgres_password,  # URL.create handles escaping
+            host=self.postgres_host,
+            port=5432,
+            database=self.postgres_db,
+            query={"sslmode": "require"},
+        )
 
     def validate_for_startup(self) -> None:
         if not self.is_local:
