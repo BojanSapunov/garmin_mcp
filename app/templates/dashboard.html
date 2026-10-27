@@ -101,7 +101,7 @@
     <h2 class="h6 text-body-secondary text-uppercase mb-2">Last month · {{ activities | length }} activities</h2>
     <div class="list-group">
       {% for a in activities %}
-      <div class="list-group-item">
+      <a class="list-group-item list-group-item-action" href="/activity/{{ a.activity_id }}">
         <div class="d-flex justify-content-between align-items-baseline gap-2">
           <div class="fw-semibold text-truncate">{{ a.activity_name or (a.activity_type | activity_type) }}</div>
           <div class="small text-body-secondary flex-shrink-0">{{ a.start_time_local.strftime('%a %d %b') }}</div>
@@ -113,7 +113,7 @@
           {% if a.is_running and a.distance_m %}<span>{{ (a.duration_s / (a.distance_m / 1000)) | pace }} /km</span>{% endif %}
           {% if a.avg_hr %}<span>{{ a.avg_hr | int }} bpm</span>{% endif %}
         </div>
-      </div>
+      </a>
       {% else %}
       <div class="list-group-item text-body-secondary">No activities in the last month. Try a refresh.</div>
       {% endfor %}

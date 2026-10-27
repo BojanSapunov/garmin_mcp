@@ -82,3 +82,52 @@ def test_database_url_from_parts_escapes_password():
     assert url.password == "p@ss:w/rd#1" and url.host == "db.example.com"
     assert url.query["sslmode"] == "require"
     assert "p%40ss%3Aw%2Frd%231" in url.render_as_string(hide_password=False)
+
+
+class FakeFiles:
+    calls = 0
+
+    def __init__(self, *_):
+        pass
+
+    def activity_file(self, activity_id):
+        FakeFiles.calls += 1
+        return b"zip-bytes"
+
+
+def test_activity_details_are_fetched_once_then_cached(loaded, monkeypatch):
+    import app.details
+    import app.main
+
+    parsed = {"version": app.details.PARSER_VERSION, "x_unit": "km", "series": {"x": [0, 1]},
+              "km_splits": [{"km": 1}], "laps": []}
+    monkeypatch.setattr(app.main, "GarminClient", FakeFiles)
+    monkeypatch.setattr(app.details, "parse_activity_file", lambda data, is_running: parsed)
+    FakeFiles.calls = 0
+    c = client("me@example.com")
+    first = c.get("/api/activity/1/details").json()
+    second = c.get("/api/activity/1/details").json()
+    assert first["available"] and first == second
+    assert FakeFiles.calls == 1
+    assert c.get("/activity/1").status_code == 200
+    assert c.get("/api/activity/999999/details").status_code == 404
+
+
+def test_activity_without_file_reports_unavailable(loaded, monkeypatch):
+    import httpx
+
+    import app.main
+
+    class Missing(FakeFiles):
+        def activity_file(self, activity_id):
+            request = httpx.Request("GET", "https://example.invalid")
+            raise httpx.HTTPStatusError("not found", request=request, response=httpx.Response(404, request=request))
+
+    monkeypatch.setattr(app.main, "GarminClient", Missing)
+    body = client("me@example.com").get("/api/activity/2/details").json()
+    assert body["available"] is False and "no recorded file" in body["reason"]
+
+
+def test_activity_pages_require_sign_in(loaded):
+    assert client().get("/activity/1", follow_redirects=False).status_code == 303
+    assert client().get("/api/activity/1/details").status_code == 401

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -55,3 +55,15 @@ class SyncRun(Base):
     updated: Mapped[int] = mapped_column(Integer, default=0)
     deleted: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class ActivityDetails(Base):
+    """Parsed FIT data for one activity, fetched from Garmin the first time it's opened."""
+
+    __tablename__ = "activity_details"
+
+    activity_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("activities.activity_id", ondelete="CASCADE"), primary_key=True)
+    parser_version: Mapped[int] = mapped_column(Integer)
+    data: Mapped[dict] = mapped_column(JSONB)  # series, km splits and laps (see app/fit.py)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
