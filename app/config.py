@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: str = "local"  # local | production
+    timezone: str = "Europe/Skopje"  # for "today" in plans; the server itself runs in UTC
     database_url: str = "postgresql+psycopg://garmin:garmin@localhost:5433/garmin"
     # In Azure the connection comes in parts, because the password is a Key Vault reference.
     # When POSTGRES_HOST is set these take precedence over DATABASE_URL.

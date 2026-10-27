@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Plans · Training log{% endblock %}
+{% block body %}
+{% set active = "plans" %}{% include "_nav.html" %}
+
+<main class="container app-container py-3">
+
+  {# ---- plans ---- #}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Your plans</h2>
+    <div class="list-group">
+      {% for p in plans %}
+      <div class="list-group-item {{ 'opacity-75' if p.status == 'archived' }}">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <a class="text-decoration-none text-body" href="/plans/{{ p.id }}">
+            <div class="fw-semibold">{{ p.name }}</div>
+            <div class="small text-body-secondary">
+              {{ 'Training' if p.kind == 'training' else 'Nutrition' }} ·
+              {{ p.start_date.strftime('%d %b') }} – {{ p.end_date.strftime('%d %b %Y') }}
+              {% if p.status == 'archived' %} · archived{% elif p.start_date <= today <= p.end_date %} · <span class="text-success-emphasis">in progress</span>{% endif %}
+              {% if p.source == 'generated' %} · generated{% endif %}
+            </div>
+          </a>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-link text-body-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Plan actions">&#8943;</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><button class="dropdown-item" data-plan-status="{{ 'active' if p.status == 'archived' else 'archived' }}" data-plan="{{ p.id }}">{{ 'Restore' if p.status == 'archived' else 'Archive' }}</button></li>
+              <li><button class="dropdown-item text-danger" data-plan-delete="{{ p.id }}" data-plan-name="{{ p.name }}">Delete…</button></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="list-group-item text-body-secondary">No plans yet. Import one below.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---- import ---- #}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Import a plan</h2>
+    <div class="card card-body">
+      <p class="small text-body-secondary mb-2">
+        A plan is a JSON file with one entry per day (format below, in “New plan”). Importing a plan with the same
+        name and type replaces the active one, so you can re-import an updated version.
+      </p>
+      <input class="form-control form-control-sm mb-2" type="file" id="plan-file" accept="application/json,.json">
+      <details class="small mb-2">
+        <summary class="text-body-secondary">…or paste JSON</summary>
+        <textarea class="form-control form-control-sm font-monospace mt-2" id="plan-json" rows="6" spellcheck="false"></textarea>
+      </details>
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-primary btn-sm" type="button" id="import-btn">Import</button>
+        <span class="small" id="import-status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  {# ---- new plan brief ---- #}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">New plan</h2>
+    <div class="card card-body">
+      <p class="small text-body-secondary mb-2">
+        Describe what you want. The app builds a brief with your last 12 weeks from Garmin and the exact import
+        format. Paste it into Claude, then import the JSON it returns above.
+      </p>
+      <form id="brief-form" class="row g-2">
+        <div class="col-6">
+          <label class="form-label small mb-1" for="b-kind">Type</label>
+          <select class="form-select form-select-sm" id="b-kind" name="kind">
+            <option value="training">Training</option>
+            <option value="nutrition">Nutrition</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1" for="b-race">Race date</label>
+          <input class="form-control form-control-sm" type="date" id="b-race" name="race_date">
+        </div>
+        <div class="col-12">
+          <label class="form-label small mb-1" for="b-goal">Goal</label>
+          <input class="form-control form-control-sm" id="b-goal" name="goal" required minlength="3"
+                 placeholder="e.g. Sub-3:15 at a spring marathon">
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1" for="b-start">Start</label>
+          <input class="form-control form-control-sm" type="date" id="b-start" name="start_date" required value="{{ today.isoformat() }}">
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1" for="b-end">End</label>
+          <input class="form-control form-control-sm" type="date" id="b-end" name="end_date" required>
+        </div>
+        <div class="col-6 training-only">
+          <label class="form-label small mb-1" for="b-kmin">Weekly km (min–max)</label>
+          <div class="input-group input-group-sm">
+            <input class="form-control" type="number" id="b-kmin" name="weekly_km_min" min="0" max="300" placeholder="100">
+            <input class="form-control" type="number" id="b-kmax" name="weekly_km_max" min="0" max="300" placeholder="120" aria-label="Weekly km max">
+          </div>
+        </div>
+        <div class="col-3 training-only">
+          <label class="form-label small mb-1" for="b-days">Run days</label>
+          <input class="form-control form-control-sm" type="number" id="b-days" name="run_days_per_week" min="1" max="7" placeholder="6">
+        </div>
+        <div class="col-3 training-only">
+          <label class="form-label small mb-1" for="b-str">Strength</label>
+          <input class="form-control form-control-sm" type="number" id="b-str" name="strength_days_per_week" min="0" max="7" placeholder="2">
+        </div>
+        <div class="col-4 nutrition-only d-none">
+          <label class="form-label small mb-1" for="b-w">Weight kg</label>
+          <input class="form-control form-control-sm" type="number" step="0.1" id="b-w" name="weight_kg">
+        </div>
+        <div class="col-4 nutrition-only d-none">
+          <label class="form-label small mb-1" for="b-tw">Target kg</label>
+          <input class="form-control form-control-sm" type="number" step="0.1" id="b-tw" name="target_weight_kg">
+        </div>
+        <div class="col-4 nutrition-only d-none">
+          <label class="form-label small mb-1" for="b-h">Height cm</label>
+          <input class="form-control form-control-sm" type="number" id="b-h" name="height_cm">
+        </div>
+        <div class="col-12">
+          <label class="form-label small mb-1" for="b-notes">Notes</label>
+          <textarea class="form-control form-control-sm" id="b-notes" name="notes" rows="2"
+                    placeholder="Preferences, injuries, long run day, diet style…"></textarea>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary btn-sm" type="submit">Build brief</button>
+        </div>
+      </form>
+      <div id="brief-out" class="d-none mt-3">
+        <textarea class="form-control form-control-sm font-monospace" id="brief-text" rows="10" readonly></textarea>
+        <div class="d-flex gap-2 mt-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" id="brief-copy">Copy</button>
+          <span class="small text-body-secondary align-self-center" id="brief-status" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="/static/plans.js"></script>
+{% endblock %}

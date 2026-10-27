@@ -1,15 +1,7 @@
 {% extends "base.html" %}
+{% from "_macros.html" import activity_row %}
 {% block body %}
-<nav class="navbar border-bottom bg-body sticky-top">
-  <div class="container app-container">
-    <span class="navbar-brand d-flex align-items-center gap-2 mb-0">
-      <img src="/static/icon.svg" alt="" width="24" height="24"> Training log
-    </span>
-    <form method="post" action="/logout" class="mb-0">
-      <button class="btn btn-sm btn-outline-secondary" type="submit">Sign out</button>
-    </form>
-  </div>
-</nav>
+{% set active = "overview" %}{% include "_nav.html" %}
 
 <main class="container app-container py-3">
 
@@ -34,6 +26,30 @@
     <strong>Garmin API key {{ 'expired' if key_days_left < 0 else 'expires in ' ~ key_days_left ~ ' days' }}.</strong>
     Create a new one in Garmin Connect and update the <code>GARMIN_API_KEY</code> secret.
   </div>
+  {% endif %}
+
+  {# ---- today's plan ---- #}
+  {% if plan_today %}
+  <section class="card card-body mb-3 today-card">
+    <div class="d-flex justify-content-between align-items-baseline mb-1">
+      <h2 class="h6 text-body-secondary text-uppercase mb-0">Today</h2>
+      <span class="small text-body-secondary">{{ today().strftime('%a %d %b') }}</span>
+    </div>
+    {% set t = plan_today.training %}{% set n = plan_today.nutrition %}
+    {% if t %}
+    <a class="d-flex justify-content-between align-items-baseline gap-2 text-decoration-none text-body" href="/plans/{{ t.plan_id }}#d-{{ t.date }}">
+      <span><span class="cat-badge cat-{{ t.category }}">{{ t.category }}</span> {{ t.title }}</span>
+      <span class="text-body-secondary flex-shrink-0 tabular">{{ '%g' % t.planned_km if t.planned_km else '' }}{{ ' km' if t.planned_km else '' }}</span>
+    </a>
+    {% if t.details.strength %}<div class="small text-body-secondary mt-1">+ Strength {{ t.details.strength }}</div>{% endif %}
+    {% endif %}
+    {% if n %}
+    <a class="d-flex justify-content-between align-items-baseline gap-2 text-decoration-none text-body mt-2" href="/plans/{{ n.plan_id }}#d-{{ n.date }}">
+      <span>Eat ~{{ n.kcal }} kcal{% if n.details.protein_g %} · {{ n.details.protein_g }} g protein{% endif %}</span>
+      <span class="text-body-secondary flex-shrink-0">Menu &rarr;</span>
+    </a>
+    {% endif %}
+  </section>
   {% endif %}
 
   {# ---- last 30 days ---- #}
@@ -98,22 +114,13 @@
 
   {# ---- last month's activities ---- #}
   <section class="mb-4">
-    <h2 class="h6 text-body-secondary text-uppercase mb-2">Last month · {{ activities | length }} activities</h2>
+    <div class="d-flex justify-content-between align-items-baseline mb-2">
+      <h2 class="h6 text-body-secondary text-uppercase mb-0">Last month · {{ activities | length }} activities</h2>
+      <a class="small" href="/activities">All activities &rarr;</a>
+    </div>
     <div class="list-group">
       {% for a in activities %}
-      <a class="list-group-item list-group-item-action" href="/activity/{{ a.activity_id }}">
-        <div class="d-flex justify-content-between align-items-baseline gap-2">
-          <div class="fw-semibold text-truncate">{{ a.activity_name or (a.activity_type | activity_type) }}</div>
-          <div class="small text-body-secondary flex-shrink-0">{{ a.start_time_local.strftime('%a %d %b') }}</div>
-        </div>
-        <div class="small text-body-secondary d-flex flex-wrap column-gap-3 row-gap-0 tabular">
-          <span><span class="type-dot {{ 'type-run' if a.is_running else 'type-other' }}"></span>{{ a.activity_type | activity_type }}</span>
-          {% if a.distance_m %}<span>{{ '%.1f' % (a.distance_m / 1000) }} km</span>{% endif %}
-          <span>{{ a.duration_s | duration }}</span>
-          {% if a.is_running and a.distance_m %}<span>{{ (a.duration_s / (a.distance_m / 1000)) | pace }} /km</span>{% endif %}
-          {% if a.avg_hr %}<span>{{ a.avg_hr | int }} bpm</span>{% endif %}
-        </div>
-      </a>
+      {{ activity_row(a) }}
       {% else %}
       <div class="list-group-item text-body-secondary">No activities in the last month. Try a refresh.</div>
       {% endfor %}

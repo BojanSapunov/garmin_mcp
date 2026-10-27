@@ -64,3 +64,9 @@ class GarminClient:
     def activity_file(self, activity_id: int) -> bytes:
         """Original activity file (usually FIT), returned as a zip archive."""
         return self.get(f"/download-service/files/activity/{activity_id}").content
+
+    def daily_summaries(self, start, end) -> list[dict]:
+        """Daily totals (calories, steps, heart rate...) for a date range of up to ~28 days."""
+        body = self.get_json("/usersummary-service/v2/dailysummaries",
+                             {"startDate": start.isoformat(), "endDate": end.isoformat()})
+        return body.get("data", []) if isinstance(body, dict) else body

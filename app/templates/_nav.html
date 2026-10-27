@@ -1,0 +1,18 @@
+{# Top bar with section tabs. Set `active` before including: overview | activities | plans #}
+<nav class="border-bottom bg-body sticky-top">
+  <div class="container app-container d-flex align-items-center justify-content-between pt-2">
+    <a class="navbar-brand d-flex align-items-center gap-2 mb-0 text-decoration-none text-body" href="/">
+      <img src="/static/icon.svg" alt="" width="24" height="24"> Training log
+    </a>
+    <form method="post" action="/logout" class="mb-0">
+      <button class="btn btn-sm btn-link text-body-secondary text-decoration-none" type="submit">Sign out</button>
+    </form>
+  </div>
+  <div class="container app-container">
+    <ul class="nav nav-underline app-tabs">
+      {% for key, label, href in [('overview', 'Overview', '/'), ('activities', 'Activities', '/activities'), ('plans', 'Plans', '/plans')] %}
+      <li class="nav-item"><a class="nav-link {{ 'active' if active == key }}" {{ 'aria-current=page' if active == key }} href="{{ href }}">{{ label }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+</nav>

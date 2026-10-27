@@ -1,0 +1,17 @@
+{# Shared fragments. Import with: {% from "_macros.html" import activity_row %} #}
+
+{% macro activity_row(a, show_year=false) %}
+      <a class="list-group-item list-group-item-action" href="/activity/{{ a.activity_id }}">
+        <div class="d-flex justify-content-between align-items-baseline gap-2">
+          <div class="fw-semibold text-truncate">{{ a.activity_name or (a.activity_type | activity_type) }}</div>
+          <div class="small text-body-secondary flex-shrink-0">{{ a.start_time_local.strftime('%a %d %b %Y' if show_year else '%a %d %b') }}</div>
+        </div>
+        <div class="small text-body-secondary d-flex flex-wrap column-gap-3 row-gap-0 tabular">
+          <span><span class="type-dot {{ 'type-run' if a.is_running else 'type-other' }}"></span>{{ a.activity_type | activity_type }}</span>
+          {% if a.distance_m %}<span>{{ '%.1f' % (a.distance_m / 1000) }} km</span>{% endif %}
+          <span>{{ a.duration_s | duration }}</span>
+          {% if a.is_running and a.distance_m %}<span>{{ (a.duration_s / (a.distance_m / 1000)) | pace }} /km</span>{% endif %}
+          {% if a.avg_hr %}<span>{{ a.avg_hr | int }} bpm</span>{% endif %}
+        </div>
+      </a>
+{% endmacro %}
