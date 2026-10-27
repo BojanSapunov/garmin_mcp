@@ -1,6 +1,10 @@
 // Training log on Azure: Container Apps (scale to zero) + PostgreSQL Flexible Server (B1ms)
 // + Log Analytics + a monthly cost budget. Deployed into an existing resource group by
 // .github/workflows/deploy.yml; safe to re-run (idempotent).
+//
+// Secrets never pass through this template or GitHub: the Key Vault, its secrets and the
+// app's managed identity are created once by scripts/azure_bootstrap.sh, and the container
+// app reads the secrets from Key Vault with that identity.
 
 param location string = resourceGroup().location
 param appName string = 'training-log'
@@ -8,20 +12,13 @@ param appName string = 'training-log'
 @description('Container image, e.g. ghcr.io/owner/repo:sha')
 param image string
 
-@secure()
-param postgresAdminPassword string
-@secure()
-param garminApiKey string
+@description('Key Vault created by scripts/azure_bootstrap.sh')
+param keyVaultName string
+@description('User-assigned identity created by scripts/azure_bootstrap.sh, with read access to the vault')
+param identityName string = 'id-${appName}'
+
 @description('Expiry date of the Garmin API key (YYYY-MM-DD), shown as a warning on the dashboard')
 param garminKeyExpires string = ''
-@secure()
-param googleClientId string
-@secure()
-param googleClientSecret string
-@secure()
-param allowedEmail string
-@secure()
-param sessionSecret string
 
 @description('Email address for budget alerts')
 param budgetEmail string
@@ -34,7 +31,14 @@ param clientIpAddress string = ''
 
 var suffix = uniqueString(resourceGroup().id)
 var pgAdmin = 'garminadmin'
-var dbName = 'garmin'
+
+resource kv 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: keyVaultName
+}
+
+resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: identityName
+}
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: 'log-${appName}-${suffix}'
@@ -46,38 +50,16 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   }
 }
 
-resource pg 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
-  name: 'pg-${appName}-${suffix}'
-  location: location
-  sku: { name: 'Standard_B1ms', tier: 'Burstable' }
-  properties: {
-    version: '16'
-    administratorLogin: pgAdmin
-    administratorLoginPassword: postgresAdminPassword
-    storage: { storageSizeGB: 32, autoGrow: 'Disabled' }
-    backup: { backupRetentionDays: 7, geoRedundantBackup: 'Disabled' }
-    highAvailability: { mode: 'Disabled' }
-    network: { publicNetworkAccess: 'Enabled' } // TLS is required; firewall limits who can connect
+module postgres 'postgres.bicep' = {
+  name: 'postgres'
+  params: {
+    location: location
+    name: 'pg-${appName}-${suffix}'
+    adminLogin: pgAdmin
+    databaseName: 'garmin'
+    adminPassword: kv.getSecret('postgres-admin-password')
+    clientIpAddress: clientIpAddress
   }
-}
-
-resource pgDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
-  parent: pg
-  name: dbName
-  properties: { charset: 'UTF8', collation: 'en_US.utf8' }
-}
-
-// 0.0.0.0 is Azure's special rule for "services inside Azure", which covers Container Apps.
-resource pgAllowAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
-  parent: pg
-  name: 'AllowAzureServices'
-  properties: { startIpAddress: '0.0.0.0', endIpAddress: '0.0.0.0' }
-}
-
-resource pgAllowClient 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = if (!empty(clientIpAddress)) {
-  parent: pg
-  name: 'AllowClientIp'
-  properties: { startIpAddress: clientIpAddress, endIpAddress: clientIpAddress }
 }
 
 resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
@@ -94,11 +76,24 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-var databaseUrl = 'postgresql+psycopg://${pgAdmin}:${postgresAdminPassword}@${pg.properties.fullyQualifiedDomainName}:5432/${dbName}?sslmode=require'
+// Container App secret name -> Key Vault secret name. Unversioned references always resolve
+// to the latest version; restart the revision after changing a secret to pick it up.
+var kvSecrets = [
+  'postgres-admin-password'
+  'garmin-api-key'
+  'google-client-id'
+  'google-client-secret'
+  'allowed-email'
+  'session-secret'
+]
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
   location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${identity.id}': {} }
+  }
   properties: {
     managedEnvironmentId: env.id
     configuration: {
@@ -109,14 +104,11 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
         allowInsecure: false
       }
-      secrets: [
-        { name: 'database-url', value: databaseUrl }
-        { name: 'garmin-api-key', value: garminApiKey }
-        { name: 'google-client-id', value: googleClientId }
-        { name: 'google-client-secret', value: googleClientSecret }
-        { name: 'allowed-email', value: allowedEmail }
-        { name: 'session-secret', value: sessionSecret }
-      ]
+      secrets: [for s in kvSecrets: {
+        name: s
+        keyVaultUrl: '${kv.properties.vaultUri}secrets/${s}'
+        identity: identity.id
+      }]
     }
     template: {
       containers: [
@@ -127,7 +119,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'APP_ENV', value: 'production' }
             { name: 'GARMIN_KEY_EXPIRES', value: garminKeyExpires }
-            { name: 'DATABASE_URL', secretRef: 'database-url' }
+            { name: 'POSTGRES_HOST', value: postgres.outputs.host }
+            { name: 'POSTGRES_USER', value: pgAdmin }
+            { name: 'POSTGRES_DB', value: postgres.outputs.databaseName }
+            { name: 'POSTGRES_PASSWORD', secretRef: 'postgres-admin-password' }
             { name: 'GARMIN_API_KEY', secretRef: 'garmin-api-key' }
             { name: 'GOOGLE_CLIENT_ID', secretRef: 'google-client-id' }
             { name: 'GOOGLE_CLIENT_SECRET', secretRef: 'google-client-secret' }
@@ -153,7 +148,6 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
       }
     }
   }
-  dependsOn: [pgDb, pgAllowAzure]
 }
 
 resource budget 'Microsoft.Consumption/budgets@2023-05-01' = {
@@ -183,4 +177,4 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = {
 }
 
 output appUrl string = 'https://${app.properties.configuration.ingress.fqdn}'
-output postgresHost string = pg.properties.fullyQualifiedDomainName
+output postgresHost string = postgres.outputs.host

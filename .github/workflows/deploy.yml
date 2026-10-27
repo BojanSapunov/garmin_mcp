@@ -57,14 +57,9 @@ jobs:
             --template-file infra/main.bicep \
             --parameters \
               image="${{ needs.build.outputs.image }}" \
-              postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
-              garminApiKey="${{ secrets.GARMIN_API_KEY }}" \
+              keyVaultName="${{ vars.AZURE_KEY_VAULT }}" \
               garminKeyExpires="${{ vars.GARMIN_KEY_EXPIRES }}" \
-              googleClientId="${{ secrets.GOOGLE_CLIENT_ID }}" \
-              googleClientSecret="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
-              allowedEmail="${{ secrets.ALLOWED_EMAIL }}" \
-              sessionSecret="${{ secrets.SESSION_SECRET }}" \
-              budgetEmail="${{ secrets.ALLOWED_EMAIL }}" \
+              budgetEmail="${{ vars.BUDGET_EMAIL }}" \
             --query properties.outputs.appUrl.value -o tsv)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed to $url" >> "$GITHUB_STEP_SUMMARY"

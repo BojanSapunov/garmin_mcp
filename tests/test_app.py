@@ -72,3 +72,13 @@ def test_summary_last_30_days(loaded):
 ])
 def test_type_keys_are_merged(raw, expected):
     assert stats.canonical_type(raw) == expected
+
+
+def test_database_url_from_parts_escapes_password():
+    from app.config import Settings
+
+    s = Settings(postgres_host="db.example.com", postgres_user="admin", postgres_password="p@ss:w/rd#1")
+    url = s.sqlalchemy_url
+    assert url.password == "p@ss:w/rd#1" and url.host == "db.example.com"
+    assert url.query["sslmode"] == "require"
+    assert "p%40ss%3Aw%2Frd%231" in url.render_as_string(hide_password=False)
