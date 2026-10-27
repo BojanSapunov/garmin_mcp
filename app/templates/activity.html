@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ a.activity_name or (a.activity_type | activity_type) }} · Training log{% endblock %}
+{% block body %}
+<nav class="navbar border-bottom bg-body sticky-top">
+  <div class="container app-container">
+    <a href="/" class="btn btn-sm btn-outline-secondary" aria-label="Back to dashboard">&larr; Back</a>
+    <span class="navbar-brand mb-0 h1 fs-6 text-truncate ms-2 me-auto">{{ a.activity_name or (a.activity_type | activity_type) }}</span>
+  </div>
+</nav>
+
+<main class="container app-container py-3" id="activity" data-activity-id="{{ a.activity_id }}"
+      data-running="{{ 'true' if a.is_running else 'false' }}">
+
+  <section class="mb-3">
+    <h1 class="h4 mb-1">{{ a.activity_name or (a.activity_type | activity_type) }}</h1>
+    <div class="small text-body-secondary">
+      {{ a.start_time_local.strftime('%A %d %B %Y, %H:%M') }} ·
+      <span class="type-dot {{ 'type-run' if a.is_running else 'type-other' }}"></span>{{ a.activity_type | activity_type }}
+      {% if a.location_name %} · {{ a.location_name }}{% endif %}
+    </div>
+  </section>
+
+  {# ---- summary ---- #}
+  <section class="mb-4">
+    {% set moving = a.moving_duration_s or a.duration_s %}
+    {% set km = (a.distance_m or 0) / 1000 %}
+    {% set tiles = [
+      ('Distance', '%.2f' % km if km else '–', ' km' if km else ''),
+      ('Time', a.duration_s | duration, ''),
+      ('Average pace' if a.is_running else 'Average speed',
+        ((moving / km) | pace) if (a.is_running and km) else ('%.1f' % (km / (moving / 3600)) if km and moving else '–'),
+        ' /km' if a.is_running else (' km/h' if km else '')),
+      ('Average heart rate', (a.avg_hr | int) if a.avg_hr else '–', ' bpm' if a.avg_hr else ''),
+      ('Max heart rate', (a.max_hr | int) if a.max_hr else '–', ' bpm' if a.max_hr else ''),
+      ('Elevation gain', (a.elevation_gain_m | round | int) if a.elevation_gain_m is not none else '–', ' m' if a.elevation_gain_m is not none else ''),
+      ('Cadence', (a.avg_cadence_spm | round | int) if a.avg_cadence_spm else '–', ' spm' if a.avg_cadence_spm else ''),
+      ('Training load', (a.training_load | round | int) if a.training_load else '–', ''),
+      ('Aerobic effect', '%.1f' % a.aerobic_te if a.aerobic_te else '–', ''),
+    ] %}
+    <div class="row row-cols-2 row-cols-md-3 g-2">
+      {% for label, value, unit in tiles %}
+      <div class="col">
+        <div class="card card-body stat-tile h-100">
+          <div class="small text-body-secondary">{{ label }}</div>
+          <div class="stat-value">{{ value }}<span class="unit">{{ unit }}</span></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---- details from the FIT file, loaded by activity.js ---- #}
+  <div id="details-loading" class="d-flex align-items-center gap-2 text-body-secondary small mb-4" role="status">
+    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+    Loading details from Garmin… (first time only)
+  </div>
+  <div id="details-unavailable" class="alert alert-secondary small d-none" role="status"></div>
+
+  <div id="details" class="d-none">
+    <section class="mb-4">
+      <h2 class="h6 text-body-secondary text-uppercase mb-2">Charts</h2>
+      <div class="card card-body mb-2">
+        <h3 class="h6 mb-0" id="pace-title">Pace</h3>
+        <div class="small text-body-secondary mb-2" id="pace-caption">min/km</div>
+        <div class="chart-box"><canvas id="pace-chart" role="img" aria-label="Pace over the activity"></canvas></div>
+      </div>
+      <div class="card card-body mb-2" id="hr-card">
+        <h3 class="h6 mb-0">Heart rate</h3>
+        <div class="small text-body-secondary mb-2">bpm</div>
+        <div class="chart-box"><canvas id="hr-chart" role="img" aria-label="Heart rate over the activity"></canvas></div>
+      </div>
+      <div class="card card-body mb-2" id="elevation-card">
+        <h3 class="h6 mb-0">Elevation</h3>
+        <div class="small text-body-secondary mb-2">metres</div>
+        <div class="chart-box chart-box-short"><canvas id="elevation-chart" role="img" aria-label="Elevation over the activity"></canvas></div>
+      </div>
+    </section>
+
+    <section class="mb-4" id="splits-section">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h6 text-body-secondary text-uppercase mb-0">Splits</h2>
+        <div class="btn-group btn-group-sm d-none" role="group" aria-label="Split type" id="split-toggle">
+          <input type="radio" class="btn-check" name="split" id="s-km" value="km" checked>
+          <label class="btn btn-outline-secondary" for="s-km">Per km</label>
+          <input type="radio" class="btn-check" name="split" id="s-laps" value="laps">
+          <label class="btn btn-outline-secondary" for="s-laps">Laps</label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 tabular splits-table" id="splits-table"></table>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+<script src="/static/activity.js"></script>
+{% endblock %}

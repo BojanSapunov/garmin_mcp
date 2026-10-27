@@ -14,7 +14,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import auth, stats
 from .config import get_settings
 from .db import get_engine, get_session
+from .details import get_details
 from .garmin import GarminClient
+from .models import Activity
 from .sync import SyncInProgress, sync_activities
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -96,7 +98,29 @@ def dashboard(request: Request, user: str = Depends(auth.require_page_user),
     })
 
 
+@app.get("/activity/{activity_id}", response_class=HTMLResponse)
+def activity_page(request: Request, activity_id: int, _: str = Depends(auth.require_page_user),
+                  session: Session = Depends(get_session)):
+    activity = session.get(Activity, activity_id)
+    if not activity:
+        raise HTTPException(404, "Activity not found")
+    return templates.TemplateResponse(request, "activity.html", {"a": activity, "raw": activity.raw or {}})
+
+
 # ---------- API ----------
+
+@app.get("/api/activity/{activity_id}/details")
+def api_activity_details(activity_id: int, _: str = Depends(auth.require_api_user),
+                         session: Session = Depends(get_session)):
+    activity = session.get(Activity, activity_id)
+    if not activity:
+        raise HTTPException(404, "Activity not found")
+    try:
+        return get_details(session, activity, GarminClient(settings.garmin_api_key))
+    except Exception as e:
+        return JSONResponse({"available": False, "reason": f"Could not load details from Garmin: {e}"},
+                            status_code=502)
+
 
 @app.get("/api/stats/distance")
 def api_distance(period: str = "week", _: str = Depends(auth.require_api_user),

@@ -11,6 +11,8 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-other: #898781;
+  --series-hr: #e34948;
+  --series-elev: #1baf7a;
 }
 [data-bs-theme="dark"] {
   --chart-surface: #1a1a19;
@@ -24,6 +26,8 @@
   --series-4: #c98500;
   --series-5: #d55181;
   --series-other: #6f6e69;
+  --series-hr: #e66767;
+  --series-elev: #199e70;
 }
 
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -46,3 +50,13 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .type-other { background: var(--series-other); }
 
 #sync-btn { min-height: 44px; }
+
+.chart-box-short { height: 160px; }
+
+.splits-table th, .splits-table td { white-space: nowrap; padding-left: 0.5rem; padding-right: 0.5rem; }
+.splits-table th:first-child, .splits-table td:first-child { padding-left: 1rem; }
+.splits-table th:last-child, .splits-table td:last-child { padding-right: 1rem; }
+.pace-cell { display: flex; align-items: center; gap: 0.5rem; }
+.pace-value { min-width: 2.6rem; text-align: right; }
+.pace-track { flex: 1; min-width: 3rem; height: 6px; }
+.pace-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--series-1); }

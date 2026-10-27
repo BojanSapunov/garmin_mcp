@@ -26,7 +26,7 @@ def engine():
     Base.metadata.create_all(eng)
     yield eng
     with eng.begin() as conn:
-        conn.execute(text("TRUNCATE activities, sync_runs"))
+        conn.execute(text("TRUNCATE activity_details, activities, sync_runs"))
 
 
 def make_activity(activity_id: int, days_ago: float, type_key: str = "running", km: float = 10,
