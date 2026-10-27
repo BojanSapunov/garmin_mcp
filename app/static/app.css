@@ -13,6 +13,7 @@
   --series-other: #898781;
   --series-hr: #e34948;
   --series-elev: #1baf7a;
+  --series-planned: #b7d3f6;
 }
 [data-bs-theme="dark"] {
   --chart-surface: #1a1a19;
@@ -28,6 +29,7 @@
   --series-other: #6f6e69;
   --series-hr: #e66767;
   --series-elev: #199e70;
+  --series-planned: #184f95;
 }
 
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -60,3 +62,27 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .pace-value { min-width: 2.6rem; text-align: right; }
 .pace-track { flex: 1; min-width: 3rem; height: 6px; }
 .pace-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--series-1); }
+
+/* ---- navigation tabs ---- */
+.app-tabs .nav-link { padding-top: 0.4rem; padding-bottom: 0.5rem; }
+
+/* ---- plans ---- */
+.cat-badge { display: inline-block; font-size: 0.7rem; line-height: 1; padding: 0.2rem 0.4rem; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: 0.02em; background: var(--bs-secondary-bg); color: var(--bs-secondary-color);
+  vertical-align: 0.1em; }
+.cat-workout, .cat-race { background: var(--series-1); color: #fff; }
+.cat-long { background: var(--series-planned); color: #0b0b0b; }
+[data-bs-theme="dark"] .cat-long { color: #fff; }
+.day-name { display: inline-block; min-width: 3.2rem; }
+.plan-today { box-shadow: inset 3px 0 0 var(--series-1); }
+.status-pill { font-size: 0.75rem; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid currentColor; }
+.status-pill.status-done { color: var(--status-good); }
+.status-pill.status-partial { color: var(--status-warning-text); }
+.status-pill.status-missed { color: var(--status-critical); }
+.status-pill.status-extra, .status-pill.status-today { color: var(--bs-secondary-color); }
+.list-group-item.status-upcoming { color: var(--bs-secondary-color); }
+details.plan-day > summary { list-style: none; cursor: pointer; }
+details.plan-day > summary::-webkit-details-marker { display: none; }
+.meals th { width: 6.5rem; }
+:root { --status-good: #0a7d0a; --status-warning-text: #9a6700; --status-critical: #d03b3b; }
+[data-bs-theme="dark"] { --status-good: #0ca30c; --status-warning-text: #fab219; --status-critical: #e66767; }

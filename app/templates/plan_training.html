@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ plan.name }} · Training log{% endblock %}
+{% set status_label = {'done': ('✓', 'Done'), 'partial': ('◐', 'Partial'), 'missed': ('✕', 'Missed'),
+                       'extra': ('+', 'Extra'), 'today': ('•', 'Today'), 'upcoming': ('', '')} %}
+{% block body %}
+{% set active = "plans" %}{% include "_nav.html" %}
+
+<main class="container app-container py-3" id="plan" data-plan-id="{{ plan.id }}">
+  <a href="/plans" class="small text-decoration-none">&larr; Plans</a>
+  <h1 class="h4 mt-1 mb-1">{{ plan.name }}</h1>
+  <div class="small text-body-secondary mb-3">
+    {{ plan.start_date.strftime('%d %b') }} – {{ plan.end_date.strftime('%d %b %Y') }}{% if plan.goal %} · {{ plan.goal }}{% endif %}
+  </div>
+
+  {# ---- headline ---- #}
+  <section class="row row-cols-2 row-cols-md-4 g-2 mb-4">
+    {% set tiles = [
+      ('Race in' if cmp.days_to_race is not none and cmp.days_to_race >= 0 else 'Race', (cmp.days_to_race ~ ' days') if cmp.days_to_race is not none and cmp.days_to_race >= 0 else '–'),
+      ('Planned to date', cmp.planned_to_date ~ ' km'),
+      ('Run to date', cmp.actual_to_date ~ ' km'),
+      ('On plan', (cmp.compliance ~ '%') if cmp.compliance is not none else '–'),
+    ] %}
+    {% for label, value in tiles %}
+    <div class="col">
+      <div class="card card-body stat-tile h-100 py-2">
+        <div class="small text-body-secondary">{{ label }}</div>
+        <div class="stat-value">{{ value }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {# ---- weekly planned vs actual ---- #}
+  <section class="card card-body mb-4">
+    <h2 class="h6 mb-0">Weekly distance</h2>
+    <div class="small text-body-secondary mb-2">km, planned vs run</div>
+    <div class="chart-box"><canvas id="weeks-chart" role="img" aria-label="Planned and actual km per week"></canvas></div>
+    <script type="application/json" id="weeks-data">{{ cmp.weeks_chart | tojson }}</script>
+    <details class="small mt-2">
+      <summary class="text-body-secondary">Show as table</summary>
+      <table class="table table-sm tabular mt-2 mb-0">
+        <thead><tr><th>Week of</th><th class="text-end">Planned</th><th class="text-end">Run</th><th class="text-end">Sessions</th></tr></thead>
+        <tbody>
+          {% for w in cmp.weeks %}
+          <tr><td>{{ w.start.strftime('%d %b') }}</td><td class="text-end">{{ w.planned_km }}</td>
+              <td class="text-end">{{ w.actual_km if not w.future else '–' }}</td>
+              <td class="text-end">{{ (w.sessions_done ~ '/' ~ w.sessions) if w.sessions else '–' }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+  </section>
+
+  {# ---- paces and notes from the plan ---- #}
+  {% if plan.meta.paces %}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Paces</h2>
+    <div class="card">
+      <table class="table table-sm small mb-0 tabular">
+        <tbody>
+          {# a list of [zone, pace] pairs keeps its order (JSONB re-sorts object keys); objects also work #}
+          {% for zone, value in (plan.meta.paces.items() if plan.meta.paces is mapping else plan.meta.paces) %}
+          <tr><td class="ps-3">{{ zone }}</td><td class="text-end pe-3">{{ value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---- day by day ---- #}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Day by day</h2>
+    {% for week in cmp.days | groupby('week_start') %}
+    <div class="small text-body-secondary mt-3 mb-1">Week of {{ week.list[0].day.date.strftime('%d %b') }}</div>
+    <div class="list-group">
+      {% for x in week.list %}
+      {% set d = x.day %}{% set icon, label = status_label[x.status] %}
+      <div class="list-group-item plan-day {{ 'plan-today' if d.date == today }} status-{{ x.status }}" id="d-{{ d.date }}">
+        <div class="d-flex justify-content-between align-items-baseline gap-2">
+          <div>
+            <span class="small text-body-secondary tabular day-name">{{ d.date.strftime('%a %d') }}</span>
+            <span class="cat-badge cat-{{ d.category }}">{{ d.category }}</span>
+            <div class="fw-semibold">{{ d.title }}</div>
+          </div>
+          {% if label %}<span class="status-pill status-{{ x.status }} flex-shrink-0"><span aria-hidden="true">{{ icon }}</span> {{ label }}</span>{% endif %}
+        </div>
+        <div class="small text-body-secondary d-flex flex-wrap column-gap-3 tabular mt-1">
+          <span>Plan {{ '%g' % d.planned_km if d.planned_km else 0 }} km</span>
+          {% if d.date <= today %}<span>Run {{ x.run_km }} km</span>{% endif %}
+          {% if x.strength_planned %}<span>Strength {{ x.strength_planned }}{% if d.date <= today %} {{ '✓' if x.strength_done else '–' }}{% endif %}</span>{% endif %}
+        </div>
+        {% if d.details.notes %}<div class="small mt-1">{{ d.details.notes }}</div>{% endif %}
+        {% for a in x.activities %}
+        <a class="small d-block mt-1 text-decoration-none" href="/activity/{{ a.activity_id }}">
+          &rarr; {{ a.activity_name or (a.activity_type | activity_type) }}{% if a.distance_m %} · {{ '%.1f' % (a.distance_m / 1000) }} km{% endif %}{% if a.is_running and a.distance_m %} · {{ (a.duration_s / (a.distance_m / 1000)) | pace }}/km{% endif %}{% if a.avg_hr %} · {{ a.avg_hr | int }} bpm{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+<script src="/static/plan.js"></script>
+{% endblock %}

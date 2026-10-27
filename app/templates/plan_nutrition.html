@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ plan.name }} · Training log{% endblock %}
+{% block body %}
+{% set active = "plans" %}{% include "_nav.html" %}
+
+<main class="container app-container py-3" id="plan" data-plan-id="{{ plan.id }}">
+  <a href="/plans" class="small text-decoration-none">&larr; Plans</a>
+  <h1 class="h4 mt-1 mb-1">{{ plan.name }}</h1>
+  <div class="small text-body-secondary mb-3">
+    {{ plan.start_date.strftime('%d %b') }} – {{ plan.end_date.strftime('%d %b %Y') }}{% if plan.goal %} · {{ plan.goal }}{% endif %}
+  </div>
+
+  {# ---- headline ---- #}
+  <section class="row row-cols-2 row-cols-md-4 g-2 mb-3">
+    {% set tiles = [
+      ('Weight (7-day avg)', (cmp.avg7_weight ~ ' kg') if cmp.avg7_weight else '–'),
+      ('Plan for today', (cmp.expected_today ~ ' kg') if cmp.expected_today else '–'),
+      ('To goal', (cmp.to_go_kg ~ ' kg') if cmp.to_go_kg is not none else '–'),
+      ('Deficit so far', ('%.1f' % cmp.estimated_loss_kg ~ ' kg') if cmp.days_with_burn else '–'),
+    ] %}
+    {% for label, value in tiles %}
+    <div class="col">
+      <div class="card card-body stat-tile h-100 py-2">
+        <div class="small text-body-secondary">{{ label }}</div>
+        <div class="stat-value">{{ value }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  <p class="small text-body-secondary mb-3">
+    “Deficit so far” = Garmin’s calories burned minus the plan’s target, summed over {{ cmp.days_with_burn }} completed
+    days, assuming you ate the target. 7,700 kcal ≈ 1 kg.
+  </p>
+
+  {# ---- weight ---- #}
+  <section class="card card-body mb-4">
+    <div class="d-flex justify-content-between align-items-baseline">
+      <h2 class="h6 mb-0">Weight</h2>
+      <span class="small text-body-secondary">kg</span>
+    </div>
+    <div class="small text-body-secondary mb-2">Your entries vs the plan’s path to {{ cmp.target_weight or '–' }} kg</div>
+    <div class="chart-box"><canvas id="weight-chart" role="img" aria-label="Weight entries and planned path"></canvas></div>
+    <script type="application/json" id="weight-data">{{ cmp.chart | tojson }}</script>
+    <form class="row g-2 align-items-end mt-2" id="weight-form">
+      <div class="col-5">
+        <label class="form-label small mb-1" for="w-date">Date</label>
+        <input class="form-control form-control-sm" type="date" id="w-date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}" required>
+      </div>
+      <div class="col-4">
+        <label class="form-label small mb-1" for="w-kg">Weight kg</label>
+        <input class="form-control form-control-sm" type="number" id="w-kg" step="0.1" min="30" max="250" required>
+      </div>
+      <div class="col-3"><button class="btn btn-primary btn-sm w-100" type="submit">Save</button></div>
+      <div class="col-12 small" id="w-status" aria-live="polite"></div>
+    </form>
+  </section>
+
+  {% if plan.meta.rules %}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Rules</h2>
+    <ul class="small ps-3 mb-0">{% for r in plan.meta.rules %}<li>{{ r }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {# ---- day by day ---- #}
+  <section class="mb-4">
+    <h2 class="h6 text-body-secondary text-uppercase mb-2">Day by day</h2>
+    {% for week in cmp.days | groupby('week_start') %}
+    <div class="small text-body-secondary mt-3 mb-1">Week of {{ week.list[0].day.date.strftime('%d %b') }}</div>
+    <div class="list-group">
+      {% for x in week.list %}
+      {% set d = x.day %}
+      <details class="list-group-item plan-day {{ 'plan-today' if x.is_today }}" id="d-{{ d.date }}" {{ 'open' if x.is_today }}>
+        <summary class="d-flex justify-content-between align-items-baseline gap-2">
+          <span class="text-truncate">
+            <span class="small text-body-secondary tabular day-name">{{ d.date.strftime('%a %d') }}</span>
+            <span class="cat-badge cat-{{ d.category }}">{{ d.category }}</span>
+            <span class="fw-semibold">{{ d.kcal }} kcal</span>
+          </span>
+          <span class="small text-body-secondary tabular flex-shrink-0">
+            {% if x.burned %}burned {{ x.burned }} · <span class="{{ 'text-success-emphasis' if x.balance > 0 else 'text-warning-emphasis' }}">{{ '%+d' % x.balance }}</span>{% endif %}
+            {% if x.weight %} · {{ x.weight }} kg{% endif %}
+          </span>
+        </summary>
+        <div class="mt-2">
+          <div class="small text-body-secondary mb-1">{{ d.title }}{% if d.details.protein_g %} · {{ d.details.protein_g }} g protein{% endif %}</div>
+          {% if d.details.notes %}<div class="small mb-2">{{ d.details.notes }}</div>{% endif %}
+          {% if d.details.meals %}
+          <table class="table table-sm small mb-0 meals">
+            <tbody>
+              {% for m in d.details.meals %}
+              <tr><th scope="row" class="fw-normal text-body-secondary">{{ m.name }}</th><td>{{ m['items'] }}</td>
+                  <td class="text-end tabular text-nowrap">{{ m.kcal or '' }}{% if m.protein_g %}<span class="text-body-secondary"> · {{ m.protein_g }}g</span>{% endif %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% endif %}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+<script src="/static/plan.js"></script>
+{% endblock %}

@@ -1,25 +1,21 @@
 """FastAPI app: dashboard pages, JSON endpoints for charts, and the on-demand sync."""
 
-from datetime import date
-from pathlib import Path
-
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth, stats
+from . import auth, routes_activities, routes_plans, stats
 from .config import get_settings
 from .db import get_engine, get_session
 from .details import get_details
 from .garmin import GarminClient
 from .models import Activity
 from .sync import SyncInProgress, sync_activities
+from .web import BASE_DIR, require_fetch, templates, today
 
-BASE_DIR = Path(__file__).resolve().parent
 settings = get_settings()
 settings.validate_for_startup()
 
@@ -33,29 +29,9 @@ app.add_middleware(
     https_only=not settings.is_local,
 )
 app.include_router(auth.router)
+app.include_router(routes_activities.router)
+app.include_router(routes_plans.router)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
-
-
-def _fmt_duration(seconds: float | None) -> str:
-    if not seconds:
-        return "–"
-    s = round(seconds)
-    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
-
-
-def _fmt_pace(seconds_per_km: float | None) -> str:
-    if not seconds_per_km:
-        return "–"
-    s = round(seconds_per_km)
-    return f"{s // 60}:{s % 60:02d}"
-
-
-def _fmt_type(type_key: str | None) -> str:
-    return (type_key or "unknown").replace("_", " ").capitalize()
-
-
-templates.env.filters.update(duration=_fmt_duration, pace=_fmt_pace, activity_type=_fmt_type)
 
 
 @app.exception_handler(auth.NotAuthenticated)
@@ -74,7 +50,7 @@ async def _security_headers(request: Request, call_next):
 
 def _key_days_left() -> int | None:
     expires = settings.garmin_key_expires
-    return (expires - date.today()).days if expires else None
+    return (expires - today()).days if expires else None
 
 
 # ---------- pages ----------
@@ -95,6 +71,7 @@ def dashboard(request: Request, user: str = Depends(auth.require_page_user),
         "activities": stats.recent_activities(session),
         "last_sync": stats.last_sync(session),
         "key_days_left": _key_days_left(),
+        "plan_today": routes_plans.today_summary(session),
     })
 
 
@@ -130,11 +107,8 @@ def api_distance(period: str = "week", _: str = Depends(auth.require_api_user),
     return stats.distance_series(session, period)
 
 
-@app.post("/api/sync")
-def api_sync(request: Request, _: str = Depends(auth.require_api_user)):
-    # Only our own fetch() sends this header; blocks cross-site form posts.
-    if request.headers.get("x-requested-with") != "fetch":
-        raise HTTPException(400, "Bad request")
+@app.post("/api/sync", dependencies=[Depends(require_fetch)])
+def api_sync(_: str = Depends(auth.require_api_user)):
     try:
         run = sync_activities(get_engine(), GarminClient(settings.garmin_api_key))
     except SyncInProgress:

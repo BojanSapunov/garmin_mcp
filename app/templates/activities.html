@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_macros.html" import activity_row %}
+{% block title %}Activities · Training log{% endblock %}
+{% block body %}
+{% set active = "activities" %}{% include "_nav.html" %}
+
+<main class="container app-container py-3">
+  {# ---- filters (GET form: the URL keeps the filter, so it can be bookmarked or shared) ---- #}
+  <form method="get" action="/activities" class="mb-3" id="filters">
+    <div class="row g-2">
+      <div class="col-6 col-md-3">
+        <label class="form-label small text-body-secondary mb-1" for="period">Period</label>
+        <select class="form-select form-select-sm" id="period" name="period">
+          {% for key, label in presets.items() %}
+          <option value="{{ key }}" {{ 'selected' if period.key == key }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small text-body-secondary mb-1" for="kind">Type</label>
+        <select class="form-select form-select-sm" id="kind" name="kind">
+          {% for key, label in kinds.items() %}
+          <option value="{{ key }}" {{ 'selected' if kind == key }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3 custom-range {{ '' if period.key == 'custom' else 'd-none' }}">
+        <label class="form-label small text-body-secondary mb-1" for="start">From</label>
+        <input class="form-control form-control-sm" type="date" id="start" name="start"
+               value="{{ period.start.isoformat() if period.key == 'custom' and period.start else '' }}">
+      </div>
+      <div class="col-6 col-md-3 custom-range {{ '' if period.key == 'custom' else 'd-none' }}">
+        <label class="form-label small text-body-secondary mb-1" for="end">To</label>
+        <input class="form-control form-control-sm" type="date" id="end" name="end"
+               value="{{ period.end.isoformat() if period.key == 'custom' else '' }}">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="visually-hidden" for="q">Search</label>
+        <div class="input-group input-group-sm">
+          <input class="form-control" type="search" id="q" name="q" value="{{ q }}" placeholder="Search name or place">
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  {# ---- totals for the selection ---- #}
+  <section class="mb-3">
+    <div class="small text-body-secondary mb-1">{{ period.label }}{% if kind != 'all' %} · {{ kinds[kind] }}{% endif %}{% if q %} · “{{ q }}”{% endif %}</div>
+    <div class="row row-cols-2 row-cols-md-4 g-2">
+      {% set tiles = [
+        ('Activities', totals.count, ''),
+        ('Running', totals.run_km, ' km'),
+        ('Time', totals.hours, ' h'),
+        ('Run pace', totals.run_pace_s_km | pace, ' /km' if totals.run_pace_s_km else ''),
+      ] %}
+      {% for label, value, unit in tiles %}
+      <div class="col">
+        <div class="card card-body stat-tile h-100 py-2">
+          <div class="small text-body-secondary">{{ label }}</div>
+          <div class="stat-value">{{ value }}<span class="unit">{{ unit }}</span></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---- list ---- #}
+  <section class="mb-4">
+    <div class="list-group">
+      {% for a in activities %}
+      {{ activity_row(a, show_year=true) }}
+      {% else %}
+      <div class="list-group-item text-body-secondary">No activities match these filters.</div>
+      {% endfor %}
+    </div>
+    {% if page > 1 or has_more %}
+    {% set base = request.query_params | dictsort | rejectattr('0', 'equalto', 'page') | list %}
+    <nav class="d-flex justify-content-between mt-2" aria-label="Pages">
+      {% if page > 1 %}
+      <a class="btn btn-sm btn-outline-secondary" href="?{{ (base + [('page', page - 1)]) | urlencode }}">&larr; Newer</a>
+      {% else %}<span></span>{% endif %}
+      {% if has_more %}
+      <a class="btn btn-sm btn-outline-secondary" href="?{{ (base + [('page', page + 1)]) | urlencode }}">Older &rarr;</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Show the date fields only for a custom range
+  document.getElementById('period').addEventListener('change', (e) => {
+    document.querySelectorAll('.custom-range').forEach((el) => el.classList.toggle('d-none', e.target.value !== 'custom'));
+  });
+</script>
+{% endblock %}
