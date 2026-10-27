@@ -100,15 +100,23 @@ fi
 az ad sp show --id "$CLIENT_ID" >/dev/null 2>&1 || az ad sp create --id "$CLIENT_ID" --output none
 SP_ID=$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)
 
-SUBJECT="repo:${REPO}:environment:production"
-if ! az ad app federated-credential list --id "$CLIENT_ID" --query "[?subject=='$SUBJECT'].name" -o tsv | grep -q .; then
-  az ad app federated-credential create --id "$CLIENT_ID" --parameters "{
-    \"name\": \"github-production\",
-    \"issuer\": \"https://token.actions.githubusercontent.com\",
-    \"subject\": \"$SUBJECT\",
-    \"audiences\": [\"api://AzureADTokenExchange\"]
-  }" --output none
-fi
+# GitHub presents either the classic subject or, for newer repos/accounts, one that includes the
+# immutable owner and repo IDs (owner@id/repo@id). Trust both, for the production environment only.
+IDS=$(curl -fsS "https://api.github.com/repos/$REPO" | "$PYTHON" -c \
+  "import sys, json; r = json.load(sys.stdin); print(r['owner']['id'], r['id'])")
+OWNER_ID=${IDS% *}; REPO_ID=${IDS#* }
+for entry in "github-production|repo:${REPO}:environment:production" \
+             "github-production-ids|repo:${REPO%%/*}@${OWNER_ID}/${REPO#*/}@${REPO_ID}:environment:production"; do
+  name=${entry%%|*}; subject=${entry#*|}
+  if ! az ad app federated-credential list --id "$CLIENT_ID" --query "[?subject=='$subject'].name" -o tsv | grep -q .; then
+    az ad app federated-credential create --id "$CLIENT_ID" --parameters "{
+      \"name\": \"$name\",
+      \"issuer\": \"https://token.actions.githubusercontent.com\",
+      \"subject\": \"$subject\",
+      \"audiences\": [\"api://AzureADTokenExchange\"]
+    }" --output none
+  fi
+done
 assign "$SP_ID" ServicePrincipal Contributor "$RG_SCOPE"
 
 cat <<EOF

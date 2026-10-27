@@ -6,7 +6,11 @@
 // app's managed identity are created once by scripts/azure_bootstrap.sh, and the container
 // app reads the secrets from Key Vault with that identity.
 
-param location string = resourceGroup().location
+// Sweden Central rather than the resource group's region (Germany West Central): there, Postgres
+// Flexible Server is restricted for this subscription and Container Apps had no capacity, and
+// West Europe is not accepting new customers (Oct 2026).
+// The Key Vault and managed identity from the bootstrap stay in the resource group's region.
+param location string = 'swedencentral'
 param appName string = 'training-log'
 
 @description('Container image, e.g. ghcr.io/owner/repo:sha')
