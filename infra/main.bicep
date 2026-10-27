@@ -11,6 +11,8 @@
 // West Europe is not accepting new customers (Oct 2026).
 // The Key Vault and managed identity from the bootstrap stay in the resource group's region.
 param location string = 'swedencentral'
+@description('Postgres can live in another region: Sweden Central had no B1ms capacity (Oct 2026), North Europe did')
+param postgresLocation string = 'northeurope'
 param appName string = 'training-log'
 
 @description('Container image, e.g. ghcr.io/owner/repo:sha')
@@ -57,8 +59,8 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 module postgres 'postgres.bicep' = {
   name: 'postgres'
   params: {
-    location: location
-    name: 'pg-${appName}-${suffix}'
+    location: postgresLocation
+    name: 'pg-${appName}-${suffix}-${postgresLocation}' // region in the name: a failed create elsewhere keeps the old name reserved
     adminLogin: pgAdmin
     databaseName: 'garmin'
     adminPassword: kv.getSecret('postgres-admin-password')
