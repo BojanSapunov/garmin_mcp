@@ -21,21 +21,24 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql+psycopg://garmin:garmin@localhost:5432/garmin_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
       - run: ruff check .
-      - run: pytest -q
-      - name: Migrations apply cleanly
+      # Before the tests, while the database is still empty (the tests create tables directly).
+      - name: Migrations apply cleanly and match the models
         env:
           DATABASE_URL: postgresql+psycopg://garmin:garmin@localhost:5432/garmin_test
-        run: alembic upgrade head
+        run: |
+          alembic upgrade head
+          alembic check
+      - run: pytest -q
 
   image:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t garmin-dashboard:ci .
